@@ -1,0 +1,15 @@
+[Output File Spec]
+format=mxf
+vcodec=h264
+acodec=mp2
+n_out_aud_tracks=2
+aud_ch=2
+vid_out_resolution=720x576
+vid_out_fps=25
+vid_out_bitrate=4000K
+aud_map_1=(7,8),1
+aud_map_2=(9,10),2
+
+[Input File Spec]
+vid_inp_scan_type=Interlaced
+n_inp_aud_tracks=12
