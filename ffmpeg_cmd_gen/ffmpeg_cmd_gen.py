@@ -4,7 +4,7 @@ import re
 
 inp_spec_schema = Schema({'format': And(str, Use(str.lower), lambda s: s in ('mxf', 'ts', 'mov', 'mp4', 'mpg')),
                            'vcodec': And(str, Use(str.lower), lambda s: s in ('h264', 'm2v', 'copy')),
-                           'acodec': And(str, Use(str.lower), lambda s: s in ('mp2', 'aac', 'copy')),
+                           'acodec': And(str, Use(str.lower), lambda s: s in ('mp2', 'aac', 'pcm_s24le', 'copy')),
                            'n_out_aud_tracks': And(Use(int), lambda n: 1 <= n <= 16),
                            'aud_ch': And(Use(int), lambda n: 1 <= n <= 2),
                            'vid_out_resolution': And(str, Use(str.lower), lambda s: s in ('1920x1080', '1280x720', '720x576',\
@@ -37,6 +37,9 @@ def header():
     return 'ffmpeg -y -i "%s" '
 
 def video(spec):
+    if spec['vcodec'] == 'copy':
+        return "-vcodec copy "
+
     video = "-pix_fmt yuv420p "
     video += "-vcodec %s " % (spec['vcodec'])
     if spec['vcodec'] == 'h264':
@@ -62,12 +65,16 @@ def audio(spec):
     else:
         audio += '-acodec %s ' % spec['acodec']
 
-    if spec['acodec'] != 'copy':
+    if spec['acodec'] != 'copy' or re.match('pcm', spec['acodec']):
         audio += '-ab 192k '
     return audio
 
 def video_filter(spec):
-    vf = '-vf \"fps=%f,scale=%s\" ' % (spec['vid_out_fps'],spec['vid_out_resolution'])
+    if spec['vcodec'] != 'copy':
+        vf = '-vf \"fps=%f,scale=%s\" ' % (spec['vid_out_fps'],spec['vid_out_resolution'])
+    else:
+        vf = ""
+
     return vf
 
 def audio_filter_complex(spec):
@@ -107,6 +114,8 @@ if __name__ == "__main__":
 
     ffmpeg_cmd = header() + video_filter(d) + afilt + video(d) + audio(d) + "-map 0:v " + amap + '"%s"'
 
+    # Create the wrapper output puthon file which will transcode using above generated command
+    # and will ensure that the input media has the same input spec as to this command
     with open("transcode.py") as fd:
         s = fd.read()
         print s
