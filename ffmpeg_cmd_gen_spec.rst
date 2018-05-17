@@ -1,10 +1,11 @@
 What we want to achieve?
 =========================
 
-- Give a mechanism to fetch a reliable previously tested ffmpeg command given
-  an input media file, output specification from a collection of commands
-- A workflow between Ops, DevOps and Dev to evolve a collection of ffmpeg commands
-- Track ffmpeg docker version which has been used to verify the commands
+- Give a mechanism to generate ffmpeg command based on the specifications given in
+  next section
+- The generated ffmpeg command is wrapped in another script so that when exercised
+  on a new input file it will validate the input spec used during command generation.
+  Failure will result in abort.
 
 
 Output specification Description
@@ -12,20 +13,20 @@ Output specification Description
 
    ::
 
-    OutProfile
+    Output File Spec
             format: {"mxf","mov","mp4","mpg","ts"}
             vcodec: {"h264","mpeg2", "copy"}
             acodec: {"mp2", "aac", "pcm16", "pcm24" ,"copy"}
-            n_aud_tracks: 1..16
+            n_out_aud_tracks: 1..16
             aud_ch: {1,2}
-            vid_scan_type: {"interlaced", "progressive"}
-            vid_resolution: {"640x480", "720x576", "1280x720", "1920x1080"}
-            vid_fps: {29.97, 30.0, 25}
-            aud_map: {f: (int,int) -> (int)  \/  f: (int) -> (int)}
+            vid_out_resolution: {"640x480", "720x576", "1280x720", "1920x1080"}
+            vid_out_fps: {29.97, 30.0, 25}
+            vid_out_bitrate: "40000..25000000"[kKM]
+            aud_map_[N]: {f: (int,int) -> (int)  \/  f: (int) -> (int)}
 
-    OutParams
-            vid_bitrate: 400000..25000000
-            aud_bitrate: 64000..512000
+    Input File Spec
+            vid_inp_scan_type={"interlaced","progressive"}
+            n_inp_aud_tracks:1..16
 
 
 Workflow
@@ -35,29 +36,12 @@ Workflow
 
    ::
 
-    > get_ffmpeg_command input_media.mp4 out_spec.txt
+    > python ffmpeg_cmd_gen.py <inpute_spec.txt> <output_transcode.py>
 
-  If previously tested combination
-       Returns an ffmpeg command that can be used -> (A)
-  else
-       Returns a candidate ffmpeg command that needs to be validated,
-       (sha1, ffmpeg_command) -> (B)
+   This command will generate an output_transcode.py file which can be used to transcode
+   a media file.
 
+- To transcode an input media file to output media file the following command can be used.
+  output_transcode.py is generated from the previous command.
 
-- If A just go ahead and use the command
-
-- If B try the candidate ffmpeg, test it -> (C)
-
-- If C passes then, checkin sha1 in "golden verified" folder git
-
-- If C fails that would need some update in "get_ffmpeg_command" -> D
-
-
-Users
-=====
-
-3 levels of users
-
-- Ops: Will only do A, if B raise request to DevOps
-- DevOps: C to be done
-- Dev: D
+   ./output_transcode.py <input_media> <output_media>
