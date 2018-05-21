@@ -28,7 +28,7 @@ def read_inp_spec(fname):
         for l in fd:
             l = l.strip()
             if len(l) > 0 and l[0] != '#' and '=' in l:
-                print l
+                #print l
                 k,v = l.split('=')
                 o_dict[k.strip()] = v.strip()
     return o_dict
@@ -118,7 +118,7 @@ if __name__ == "__main__":
     # and will ensure that the input media has the same input spec as to this command
     with open("transcode.py") as fd:
         s = fd.read()
-        print s
+        #print s
         s = s.format(scan_type=d['vid_inp_scan_type'], num_aud=d['n_inp_aud_tracks'], ffmpeg_cmd=ffmpeg_cmd)
         ofd = open(sys.argv[2], "w")
         ofd.write(s)
