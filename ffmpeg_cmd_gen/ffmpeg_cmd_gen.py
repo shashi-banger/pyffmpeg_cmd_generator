@@ -1,5 +1,6 @@
 from schema import Schema, And, Use, Optional, Or, Regex
 import re
+import sys
 
 
 inp_spec_schema = Schema({'format': And(str, Use(str.lower), lambda s: s in ('mxf', 'ts', 'mov', 'mp4', 'mpg')),
@@ -7,6 +8,7 @@ inp_spec_schema = Schema({'format': And(str, Use(str.lower), lambda s: s in ('mx
                            'acodec': And(str, Use(str.lower), lambda s: s in ('mp2', 'aac', 'pcm_s24le', 'copy')),
                            'n_out_aud_tracks': And(Use(int), lambda n: 1 <= n <= 16),
                            'aud_ch': And(Use(int), lambda n: 1 <= n <= 2),
+                           'gop_length': And(Use(int)),
                            'vid_out_resolution': And(str, Use(str.lower), lambda s: s in ('1920x1080', '1280x720', '720x576',\
                                                                                           '720x480', '640x480')),
                           'vid_out_bitrate': Or(And(Use(int)), And(Regex('[0-9\.]*[kK]'), Use(str)),\
@@ -16,10 +18,21 @@ inp_spec_schema = Schema({'format': And(str, Use(str.lower), lambda s: s in ('mx
                           Optional(Regex('aud_map')): Or(And(str, Use(eval), lambda (a,b): 1<=a<16 and 1<=b<=16),\
                                                          And(str, Use(eval), lambda ((a,b), c): 1<=a<16 and 1<=b<=16 and 1<=c<=16)),
                           'vid_inp_scan_type': And(str, Use(str.lower), lambda s: s in ('progressive', 'interlaced')),
-                          'n_inp_aud_tracks': And(Use(int), lambda n: 1 <= n <=16)
+                          'n_inp_aud_tracks': And(Use(int), lambda n: 1 <= n <=16),
+                           'streamid_vid': And(Use(int)),
+                           'streamid_aud_start': And(Use(int))
                           })
 
 
+
+def _get_vid_bitrate_(s):
+    if s[-1] in 'kK':
+        o_bitrate = int(s[:-1]) * 1000
+    elif d['vid_out_bitrate'][-1] in 'M':
+        o_bitrate = int(s[:-1]) * 1000000
+    else:
+        o_bitrate = int(s[:-1])
+    return o_bitrate
 
 
 def read_inp_spec(fname):
@@ -40,28 +53,28 @@ def video(spec):
     if spec['vcodec'] == 'copy':
         return "-vcodec copy "
 
-    video = "-pix_fmt yuv420p "
-    video += "-vcodec %s " % (spec['vcodec'])
+    video = "-pix_fmt yuv420p  "
+    video += "-vcodec %s -g %d -bf 2 " % (spec['vcodec'], spec['gop_length'])
     if spec['vcodec'] == 'h264':
         video += "-x264opts nal-hrd=cbr "
         video += "-profile:v high "
         if spec['vid_inp_scan_type'] == 'interlaced':
             video += "-flags +ilme+ildct -top 1 "
 
-    if d['vid_out_bitrate'][-1] in 'kK':
-        o_bitrate = int(d['vid_out_bitrate'][:-1]) * 1000
-    elif d['vid_out_bitrate'][-1] in 'M':
-        o_bitrate = int(d['vid_out_bitrate'][:-1]) * 1000000
+    if spec['vid_out_bitrate'][-1] in 'kK':
+        o_bitrate = int(spec['vid_out_bitrate'][:-1]) * 1000
+    elif spec['vid_out_bitrate'][-1] in 'M':
+        o_bitrate = int(spec['vid_out_bitrate'][:-1]) * 1000000
     else:
-        o_bitrate = int(d['vid_out_bitrate'][:-1])
+        o_bitrate = int(spec['vid_out_bitrate'][:-1])
 
     video += "-vb %d -minrate:v %d -maxrate:v %d -bufsize:v %d " % (o_bitrate, o_bitrate, o_bitrate, (2*o_bitrate))
     return video
 
 def audio(spec):
-    audio = ""
+    audio = " -ar 48000 "
     if spec['acodec'] == 'aac':
-        audio += '-acodec %s ' %"libfdk_aac"
+        audio += '-acodec %s -profile:a aac_low ' %"libfdk_aac"
     else:
         audio += '-acodec %s ' % spec['acodec']
 
@@ -105,22 +118,47 @@ def audio_filter_complex(spec):
 
     return (afilter, amapping)
 
-if __name__ == "__main__":
-    import sys
+def muxer_params(spec):
+    mux_params = ""
+    if spec['format'] == 'ts':
+        vb = _get_vid_bitrate_(spec['vid_out_bitrate'])
+        mux_rate = vb + 192000*spec['n_out_aud_tracks']
+        mux_rate = 1.1 * mux_rate
+        mux_params = " -muxrate %d " % int(mux_rate)
+        mux_params += " -streamid 0:%d " % spec['streamid_vid']
+        for i in range(spec['n_out_aud_tracks']):
+            mux_params += " -streamid %d:%d " % (i+1, spec['streamid_aud_start'] + i)
+    return mux_params
+
+
+
+import inspect
+import transcode
+def main():
+    if len(sys.argv) < 3:
+        print "Usage: ffmpeg_cmd_gen <input_spec> <output_transcode_file.py>"
+        sys.exit(1)
     d = read_inp_spec(sys.argv[1])
     d = inp_spec_schema.validate(d)
 
     afilt, amap = audio_filter_complex(d)
 
-    ffmpeg_cmd = header() + video_filter(d) + afilt + video(d) + audio(d) + "-map 0:v " + amap + '"%s"'
+    ffmpeg_cmd = header() + video_filter(d) + afilt + video(d) + audio(d) + "-map 0:v " + amap + muxer_params(d) + \
+                                          " -vsync 1 -async 1 " '"%s"'
 
     # Create the wrapper output puthon file which will transcode using above generated command
     # and will ensure that the input media has the same input spec as to this command
-    with open("transcode.py") as fd:
-        s = fd.read()
+    #with open("transcode.py") as fd:
+    if(True):
+        s = inspect.getsource(transcode)
+        #s = fd.read()
         #print s
         s = s.format(scan_type=d['vid_inp_scan_type'], num_aud=d['n_inp_aud_tracks'], ffmpeg_cmd=ffmpeg_cmd)
         ofd = open(sys.argv[2], "w")
         ofd.write(s)
         ofd.close()
     print ffmpeg_cmd
+
+
+if __name__ == "__main__":
+    main()
