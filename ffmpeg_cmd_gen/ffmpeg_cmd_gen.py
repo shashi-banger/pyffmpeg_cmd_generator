@@ -25,7 +25,7 @@ inp_spec_schema = Schema({'format': And(str, Use(str.lower), lambda s: s in ('mx
 
 
 
-def _get_vid_bitrate_(s):
+def _get_vid_bitrate_(s, d):
     if s[-1] in 'kK':
         o_bitrate = int(s[:-1]) * 1000
     elif d['vid_out_bitrate'][-1] in 'M':
@@ -57,6 +57,10 @@ def video(spec):
     video += "-vcodec %s -g %d -bf 2 " % (spec['vcodec'], spec['gop_length'])
     if spec['vcodec'] == 'h264':
         video += "-x264opts nal-hrd=cbr "
+        video += "-profile:v high "
+        if spec['vid_inp_scan_type'] == 'interlaced':
+            video += "-flags +ilme+ildct -top 1 "
+    elif spec['vcodec'] == 'mpeg2video':
         video += "-profile:v high "
         if spec['vid_inp_scan_type'] == 'interlaced':
             video += "-flags +ilme+ildct -top 1 "
@@ -121,7 +125,7 @@ def audio_filter_complex(spec):
 def muxer_params(spec):
     mux_params = ""
     if spec['format'] == 'ts':
-        vb = _get_vid_bitrate_(spec['vid_out_bitrate'])
+        vb = _get_vid_bitrate_(spec['vid_out_bitrate'], spec)
         mux_rate = vb + 192000*spec['n_out_aud_tracks']
         mux_rate = 1.1 * mux_rate
         mux_params = " -muxrate %d " % int(mux_rate)
