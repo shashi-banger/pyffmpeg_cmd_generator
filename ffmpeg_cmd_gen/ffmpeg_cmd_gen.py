@@ -4,7 +4,7 @@ import sys
 
 
 inp_spec_schema = Schema({'format': And(str, Use(str.lower), lambda s: s in ('mxf', 'ts', 'mov', 'mp4', 'mpg')),
-                           'vcodec': And(str, Use(str.lower), lambda s: s in ('h264', 'm2v', 'copy')),
+                           'vcodec': And(str, Use(str.lower), lambda s: s in ('h264', 'mpeg2video', 'copy')),
                            'acodec': And(str, Use(str.lower), lambda s: s in ('mp2', 'aac', 'pcm_s24le', 'copy')),
                            'n_out_aud_tracks': And(Use(int), lambda n: 1 <= n <= 16),
                            'aud_ch': And(Use(int), lambda n: 1 <= n <= 2),
@@ -61,7 +61,7 @@ def video(spec):
         if spec['vid_inp_scan_type'] == 'interlaced':
             video += "-flags +ilme+ildct -top 1 "
     elif spec['vcodec'] == 'mpeg2video':
-        video += "-profile:v high "
+        video += "-profile:v 4 -level:v 4 " #mp@hl: https://forum.videohelp.com/threads/345143-mpeg2-MP-ML-with-ffmpeg
         if spec['vid_inp_scan_type'] == 'interlaced':
             video += "-flags +ilme+ildct -top 1 "
 
@@ -72,7 +72,7 @@ def video(spec):
     else:
         o_bitrate = int(spec['vid_out_bitrate'][:-1])
 
-    video += "-vb %d -minrate:v %d -maxrate:v %d -bufsize:v %d " % (o_bitrate, o_bitrate, o_bitrate, (2*o_bitrate))
+    video += "-vb %d -minrate:v %d -maxrate:v %d -bufsize:v %d " % (o_bitrate, o_bitrate, o_bitrate, int(0.5*o_bitrate))
     return video
 
 def audio(spec):
