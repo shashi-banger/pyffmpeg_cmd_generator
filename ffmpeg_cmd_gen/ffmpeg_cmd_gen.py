@@ -5,18 +5,18 @@ import sys
 
 inp_spec_schema = Schema({'format': And(str, Use(str.lower), lambda s: s in ('mxf', 'ts', 'mov', 'mp4', 'mpg')),
                            'vcodec': And(str, Use(str.lower), lambda s: s in ('h264', 'mpeg2video', 'copy')),
-                           'acodec': And(str, Use(str.lower), lambda s: s in ('mp2', 'aac', 'pcm_s24le', 'copy')),
+                           'acodec': And(str, Use(str.lower), lambda s: s in ('mp2', 'aac', 'pcm_s24le', 'ac3', 'copy')),
                            'n_out_aud_tracks': And(Use(int), lambda n: 1 <= n <= 16),
                            'aud_ch': And(Use(int), lambda n: 1 <= n <= 2),
                            'gop_length': And(Use(int)),
                            'vid_out_resolution': And(str, Use(str.lower), lambda s: s in ('1920x1080', '1280x720', '720x576',\
                                                                                           '720x480', '640x480')),
-                          'vid_out_bitrate': Or(And(Use(int)), And(Regex('[0-9\.]*[kK]'), Use(str)),\
+                          'vid_out_bitrate': Or(And(Use(str)), And(Regex('[0-9\.]*[kK]'), Use(str)),\
                                                 And(Regex('[0-9\.]*[M]'), Use(str))),
                            'vid_out_fps': And(str, Use(float), lambda f: f in [25.0, 29.97, 30.0]),
                           #Optional(Regex('aud_map')): Or(((Use(int),Use(int), Use(int))), Use(tuple(Use(int), Use(int)))),
-                          Optional(Regex('aud_map')): Or(And(str, Use(eval), lambda (a,b): 1<=a<16 and 1<=b<=16),\
-                                                         And(str, Use(eval), lambda ((a,b), c): 1<=a<16 and 1<=b<=16 and 1<=c<=16)),
+                          Optional(Regex('aud_map')): Or(And(str, Use(eval), lambda a: 1<=a[0]<16 and 1<=a[1]<=16),\
+                                                         And(str, Use(eval), lambda a: 1<=a[0][0]<16 and 1<=a[0][1]<=16 and 1<=a[1]<=16)),
                           'vid_inp_scan_type': And(str, Use(str.lower), lambda s: s in ('progressive', 'interlaced')),
                           'n_inp_aud_tracks': And(Use(int), lambda n: 1 <= n <=16),
                            'streamid_vid': And(Use(int)),
@@ -103,8 +103,10 @@ def audio_filter_complex(spec):
             amap_spec[k] = spec[k]
 
     afilter_val = ""
+
+    amap_keys = list(amap_spec.keys())
     if len(amap_spec.keys()) > 0:
-        type_amap = type(amap_spec[amap_spec.keys()[0]][0])
+        type_amap = type(amap_spec[amap_keys[0]][0])
         if type_amap == tuple:
             afilter = "-filter_complex "
             aindex = 0
@@ -140,7 +142,7 @@ import inspect
 import transcode
 def main():
     if len(sys.argv) < 3:
-        print "Usage: ffmpeg_cmd_gen <input_spec> <output_transcode_file.py>"
+        print("Usage: ffmpeg_cmd_gen <input_spec> <output_transcode_file.py>")
         sys.exit(1)
     d = read_inp_spec(sys.argv[1])
     d = inp_spec_schema.validate(d)
@@ -161,7 +163,7 @@ def main():
         ofd = open(sys.argv[2], "w")
         ofd.write(s)
         ofd.close()
-    print ffmpeg_cmd
+    print(ffmpeg_cmd)
 
 
 if __name__ == "__main__":
